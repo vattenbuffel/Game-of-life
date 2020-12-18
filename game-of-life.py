@@ -173,19 +173,19 @@ class GUI:
 
         self.game.cell_clicked(row, col)
 
+    # Clear the board and redraw it. Only if something's been updated though
     def draw_updated(self):
-        # Draw those cells which have been updated!
-        for key in self.game.updated_cells:
-            if self.game.updated_cells[key].alive:
-                self.fill_cell(key)
-            else:
-                self.clear_cell(key)
+        if len(self.game.updated_cells) == 0: return
 
-        # Draw new grid but only if something's been updated
-        if len(self.game.updated_cells) > 0:
-            self.draw_grid()
+        gui.canvas.delete("all")
+
+        for key in self.game.alive_cells:
+            self.fill_cell(key)
 
         self.game.updated_cells = {}
+
+        self.draw_grid()
+
             
     def update(self):
         if self.run_game or self.step:
@@ -216,7 +216,7 @@ class GUI:
 
 
 
-gui = GUI(3,3)
+gui = GUI(30,30)
 
 while True:
     gui.update()
