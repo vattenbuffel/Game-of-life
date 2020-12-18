@@ -1,6 +1,7 @@
 import tkinter as tk
 import numpy as np
 import copy
+import time
 # BUG: It gets very slow after running for a while. For example the blinker. Fix this
 
 
@@ -87,6 +88,7 @@ class GUI:
         self.grid_border_width = 1# % of the cell_width
         self.bg_color = "#434547"
         self.grid_color = "white"
+        self.fps = 60
 
         self.n_rows = n_rows
         self.n_cols = n_cols
@@ -126,15 +128,27 @@ class GUI:
         self.top.rowconfigure(0, minsize=height, weight=1)
         self.top.columnconfigure(1, minsize=75, weight=1)
         self.frame_buttons = tk.Frame(self.top)
+        
         self.button_start_stop = tk.Button(self.frame_buttons, text="Start", command = lambda : self.start_button_clicked())
         self.frame_buttons.grid(row=0, column=1, sticky="n", padx=5, pady=5)
         self.button_start_stop.pack()
+        
         self.button_step = tk.Button(self.frame_buttons, text="Step", command = lambda : self.button_step_clicked())
         self.button_step.pack()
 
+        self.label_fps = tk.Label(self.frame_buttons, text="Fps")
+        self.label_fps.pack()
+        self.slider_fps = tk.Scale(self.frame_buttons, from_=1, to=120, command = lambda val : self.slider_fps_change(val))
+        self.slider_fps.set(self.fps)
+        self.slider_fps.pack()
 
         self.draw_grid()
+        self.last_update = time.time()
         
+
+    def slider_fps_change(self, val):
+        self.fps = float(val)
+
     def button_step_clicked(self):
         self.step = True
     
@@ -188,12 +202,14 @@ class GUI:
 
             
     def update(self):
-        if self.run_game or self.step:
-            if self.step:
+        
+        if self.step:
+            self.game.update_board()
+            self.step = False
+        elif self.run_game:
+            if (time.time() - self.last_update) > 1/self.fps:
                 self.game.update_board()
-                self.step = False
-            else:
-                self.game.update_board()
+                self.last_update = time.time()
         self.draw_updated()
 
     def draw_grid(self):
