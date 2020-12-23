@@ -107,8 +107,8 @@ class GUI:
         self.bg_color = "#434547"
         self.grid_color = "white"
         self.fps = 60
-        self.cell_height = 25
-        self.cell_width = 25
+        self.cell_height = 10
+        self.cell_width = 10
 
         self.n_rows = n_rows
         self.n_cols = n_cols
