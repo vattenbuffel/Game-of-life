@@ -14,6 +14,8 @@ class Cell:
 
 class Game:
     def __init__(self, n_cols, n_rows):
+        self.n_cols = n_cols
+        self.n_rows = n_rows
         self.alive_cells = {}
         self.updated_cells = {}
         self.cells = []
@@ -43,19 +45,32 @@ class Game:
 
     def update_board(self):
         cells_who_will_live = []
-        cells_who_will_die = []  
-        for cell in self.cells.reshape(-1):
-            nr_alive_neighbours = self.get_nr_alive_neighbours(cell)
+        cells_who_will_die = [] 
+        checked_cells = [] 
+        for key in self.alive_cells:
+            cell_ = self.alive_cells[key]
+            min_row = max(cell_.row-1, 0)
+            min_col = max(cell_.col-1, 0)
+            max_col = min(cell_.col+2, self.n_cols+1)
+            max_row = min(cell_.row+2, self.n_rows+1)
 
-            if nr_alive_neighbours < 2 or nr_alive_neighbours > 3:
-                if cell.alive:
-                    cells_who_will_die.append(cell)
-            elif not cell.alive and nr_alive_neighbours==3:
-                cells_who_will_live.append(cell)
-            else:
-                # It is alive and survives so no update
-                pass
-            
+            neighbours = self.cells[min_row:max_row, min_col:max_col].reshape(-1)
+            for cell in neighbours:
+                if cell in checked_cells:
+                    continue
+                
+                checked_cells.append(cell)
+                nr_alive_neighbours = self.get_nr_alive_neighbours(cell)
+
+                if nr_alive_neighbours < 2 or nr_alive_neighbours > 3:
+                    if cell.alive:
+                        cells_who_will_die.append(cell)
+                elif not cell.alive and nr_alive_neighbours==3:
+                    cells_who_will_live.append(cell)
+                else:
+                    # It is alive and survives so no update
+                    pass
+                
         for cell in cells_who_will_die:
             self.update_cell(cell.row, cell.col)
         
@@ -81,8 +96,8 @@ class Game:
 
 class GUI:
     def __init__(self, n_rows, n_cols):
-        self.max_width = 640
-        self.max_height = 480
+        self.max_width = 1080
+        self.max_height = 720
         self.cell_height = 500
         self.cell_width = 500
         self.cell_margin = 0
@@ -116,8 +131,8 @@ class GUI:
         else:
             self.n_cols_visable = int(self.max_width/self.cell_width)
             width = self.max_width
-        self.top_left_cell_x = 0
-        self.top_left_cell_y = 0
+        self.top_left_cell_x = max(0, (n_cols-self.n_cols_visable)/2)
+        self.top_left_cell_y = max(0, (n_rows-self.n_rows_visable)/2)
             
         
         self.game = Game(n_cols, n_rows)
@@ -253,7 +268,6 @@ class GUI:
 
         self.canvas.create_rectangle(x0, y0, x1, y1, fill = color)
 
-# BUG: Why doesn't this actually clear the cell fully?
     def clear_cell(self, location):
         row, col = location
         self.draw_square_in_cell(row, col, self.bg_color)
@@ -324,7 +338,7 @@ class GUI:
 
 
 
-gui = GUI(3,3)
+gui = GUI(300,300)
 
 while True:
     gui.update()
