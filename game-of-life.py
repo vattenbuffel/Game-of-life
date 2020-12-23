@@ -2,7 +2,8 @@ import tkinter as tk
 import numpy as np
 import copy
 import time
-# BUG: It gets very slow after running for a while. For example the blinker. Fix this
+from tkinter.filedialog import askopenfilename, asksaveasfilename
+import re
 
 
 class Cell:
@@ -29,13 +30,13 @@ class Game:
         self.update_cell( row, col)
 
     # Moves it in and out of lists and sets it to alive or dead
-    def update_cell(self, row, col, kill=False, revive = False):
-        if self.cells[row,col].alive or kill:
+    def update_cell(self, row, col):
+        if self.cells[row,col].alive:
             self.cells[row,col].alive = False
             del self.alive_cells[row,col] 
             self.updated_cells[(row, col)] = self.cells[row,col]
 
-        elif not self.cells[row,col].alive or revive:
+        elif not self.cells[row,col].alive:
             self.cells[row,col].alive = not self.cells[row,col].alive
             self.updated_cells[(row, col)] = self.cells[row,col]
             self.alive_cells[(row, col)] = self.cells[row,col]
@@ -124,7 +125,6 @@ class GUI:
 
 
         # Add buttons
-        # Add more buttons. Add a step button and a fps slider
         self.top.rowconfigure(0, minsize=height, weight=1)
         self.top.columnconfigure(1, minsize=75, weight=1)
         self.frame_buttons = tk.Frame(self.top)
@@ -142,9 +142,64 @@ class GUI:
         self.slider_fps.set(self.fps)
         self.slider_fps.pack()
 
+        self.button_open = tk.Button(self.frame_buttons, text="Open", command=self.open_file)
+        self.button_open.pack()
+        self.button_save = tk.Button(self.frame_buttons, text="Save As...", command=self.save_file)
+        self.button_save.pack()
+
         self.draw_grid()
         self.last_update = time.time()
         
+
+    def open_file(self):
+        """Open a file for editing."""
+        filepath = askopenfilename(
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+        if not filepath:
+            return
+        
+        with open(filepath, "r") as input_file:
+            game_data = input_file.read().split("\n")
+            # The last element will be a \n. Remove this
+            game_data.pop(-1)
+
+            # Create the board
+            for data in game_data:
+                if "grid_size" in data:
+                    size = [int(num) for num in re.findall(r'\d+', data)]
+                    self.top.destroy()
+                    self.__init__(size[0], size[1])
+                    game_data.remove(data)
+                    break
+            
+            # Fill the board
+            for data in game_data:
+                if "False" in data:
+                    continue
+                index = [int(num) for num in re.findall(r'\d+', data)]
+                self.game.update_cell(index[0], index[1])
+                
+
+            
+
+    def save_file(self):
+        """Save the current file as a new file."""
+        filepath = asksaveasfilename(
+            defaultextension="txt",
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
+        )
+        if not filepath:
+            return
+        with open(filepath, "w") as output_file:
+            game_config = "grid_size:" + str(self.game.cells.shape) + "\n"
+            board_txt = ""
+            for cell in self.game.cells.reshape(-1):
+                board_txt +=  "row:" + str(cell.row) + "col:" + str(cell.col) + "alive:" + str(cell.alive)  +"\n"
+
+            output_file.write(game_config)
+            output_file.write(board_txt)
+
 
     def slider_fps_change(self, val):
         self.fps = float(val)
@@ -232,7 +287,7 @@ class GUI:
 
 
 
-gui = GUI(30,30)
+gui = GUI(3,3)
 
 while True:
     gui.update()
