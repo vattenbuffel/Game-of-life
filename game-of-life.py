@@ -5,6 +5,8 @@ import time
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 import re
 
+# Change save file to pickle
+
 
 class Cell:
     def __init__(self, col, row, alive=False):
@@ -223,10 +225,20 @@ class GUI:
             
             # Fill the board
             for data in game_data:
-                if "False" in data:
+                if "False" in data or not "True" in data:
                     continue
                 index = [int(num) for num in re.findall(r'\d+', data)]
                 self.game.update_cell(index[0], index[1])
+
+            # Fix viewing location
+            for data in game_data:
+                if "top_left_coordinates:" in data:
+                      top_left = [int(num) for num in re.findall(r'\d+', data)]
+                      self.top_left_cell_y = top_left[0]
+                      self.top_left_cell_x = top_left[1]
+                      self.slider_row.set(self.top_left_cell_y)
+                      self.slider_col.set(self.top_left_cell_x)
+                      break
                 
     def save_file(self):
         """Save the current file as a new file."""
@@ -239,6 +251,7 @@ class GUI:
         with open(filepath, "w") as output_file:
             game_config = "grid_size:" + str(self.game.cells.shape) + "\n"
             board_txt = ""
+            board_txt += "top_left_coordinates:" + str((self.top_left_cell_y,self.top_left_cell_x)) + "\n"
             for cell in self.game.cells.reshape(-1):
                 board_txt +=  "row:" + str(cell.row) + "col:" + str(cell.col) + "alive:" + str(cell.alive)  +"\n"
 
