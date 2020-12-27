@@ -184,6 +184,7 @@ def popupmsg(msg):
     label.pack(side="top", fill="x", pady=10)
     B1 = tk.Button(popup, text="Okay", command = popup.destroy)
     B1.pack()
+    popup.bind("<KeyPress>", lambda event: popup.destroy())
     popup.mainloop()
 
     
