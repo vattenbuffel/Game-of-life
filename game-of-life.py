@@ -9,8 +9,9 @@ import pickle
 import threading
 
 # TODO:Change save file to pickle
-# TODO:Load structure
-# TODO:Clear/fill cell doesn't clear nor fill correctly
+# TODO:Add scrolling via hjkl
+# TODO:Add so that popuppmsg can be closed via keyboard
+
 
 class Cell:
     def __init__(self, col, row, alive=False):
@@ -166,7 +167,7 @@ def save_structure(data_queue, board, lock_save, lock_done, queue_blink):
     # Get the save filepath
     lock_save.release()
     file_path = data_queue.get()
-    if file_path:
+    if file_path: # Check if correct file path
         pickle.dump(alive_cells, open(file_path, "wb" ))
 
     queue_blink.put((board[upper_left_row, upper_left_col], False))
@@ -434,14 +435,6 @@ class GUI:
         self.canvas.delete(cell.drawing)
         cell.drawing = self.fill_cell((cell.row-offset_row, cell.col-offset_col))
 
-    def reclear_cell(self, cell, offset_row, offset_col):
-        self.canvas.delete(cell.drawing)
-        cell.drawing = self.clear_cell((cell.row-offset_row, cell.col-offset_col))
-
-    def clear_cell(self, location):
-        row, col = location
-        return self.draw_square_in_cell(row, col, self.bg_color)
-
     def fill_cell(self, location):
         row, col = location
         return self.draw_square_in_cell(row, col, "black")
@@ -472,8 +465,6 @@ class GUI:
 
         # Game should register that a cell was clicked on
         self.game.cell_clicked(row, col)
-
-
 
     # Clear the board and redraw it. Only if something's been updated though
     def draw_updated(self):
@@ -520,6 +511,7 @@ class GUI:
             self.last_blink = time.time()
 
     def update(self):
+        # Progress the game
         if self.step:
             self.game.update_board()
             self.step = False
@@ -538,7 +530,7 @@ class GUI:
             self.queue_structure = None
 
 
-        # Handle blinking cell
+        # Handle blinking cells
         # Get/remove blinking cells from other threads
         try:
             cell, add = self.queue_blinking_receive.get_nowait()
@@ -547,11 +539,11 @@ class GUI:
             else:
                 self.blinking_cells.remove(cell)
                 # Redraw it to the proper fill or clear
-                self.canvas.delete(cell.drawing)
                 if cell.alive:
-                    cell.drawing = self.fill_cell((cell.row-self.top_left_cell_y, cell.col-self.top_left_cell_x))
+                    self.refill_cell(cell,self.top_left_cell_y, self.top_left_cell_x)
                 else:
-                    cell.drawing = self.clear_cell((cell.row-self.top_left_cell_y, cell.col-self.top_left_cell_x))
+                    self.canvas.delete(cell.drawing)
+                    
         except:
             pass
         self.draw_blinking()
