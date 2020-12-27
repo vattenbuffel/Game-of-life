@@ -319,7 +319,7 @@ class GUI:
         self.mouse_col, self.mouse_row = col, row
 
         for cell in self.structure_to_place:
-            self.reclear_cell(cell, self.mouse_row, self.mouse_col)
+            self.canvas.delete(cell.drawing)
 
 
     def open_structure(self):
@@ -459,7 +459,7 @@ class GUI:
         if len(self.structure_to_place) > 0:
             for cell in self.structure_to_place:
                 self.game.revive_cell(cell.row+self.mouse_row+self.top_left_cell_y, cell.col+self.mouse_col+self.top_left_cell_x)
-                self.reclear_cell(cell, -self.mouse_row, -self.mouse_col)
+                self.canvas.delete(cell.drawing)
             self.structure_to_place = []
             return
 
@@ -496,14 +496,14 @@ class GUI:
         if time.time() - self.last_blink > 1/self.blinking_hz:
             for cell in self.blinking_cells:
                 if not self.blinking_state:  
-                    self.reclear_cell(cell, self.top_left_cell_y, self.top_left_cell_x)
+                    self.canvas.delete(cell.drawing)
                 else:
                     self.refill_cell(cell, self.top_left_cell_y, self.top_left_cell_x)
                     
             # Draw structure to place
             for cell in self.structure_to_place:
                 if not self.blinking_state:  
-                    self.reclear_cell(cell, -self.mouse_row, -self.mouse_col)
+                    self.canvas.delete(cell.drawing)
                 else:
                     self.refill_cell(cell, -self.mouse_row, -self.mouse_col)
 
