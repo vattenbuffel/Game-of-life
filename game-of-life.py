@@ -9,8 +9,7 @@ import pickle
 import threading
 
 # TODO:Change save file to pickle
-# TODO:Add scrolling via hjkl
-# TODO:Add so that popuppmsg can be closed via keyboard
+# TODO:Fix blinking cell when scrolling with hjkl
 
 
 class Cell:
@@ -311,7 +310,20 @@ class GUI:
         # Get mouse location
         self.top.bind('<Motion>', self.update_mouse_position)
         self.mouse_col, self.mouse_row = None, None
+
+        # Handle keyboard presses
+        self.top.bind("<KeyPress>", self.keyboard_pressed)
         
+    def keyboard_pressed(self, event):
+        if event.char == 'j':
+            self.slider_row.set(self.top_left_cell_y + 1)
+        elif event.char == 'k':
+            self.slider_row.set(self.top_left_cell_y - 1)
+        elif event.char == 'h':
+            self.slider_col.set(self.top_left_cell_x - 1)
+        elif event.char == 'l':
+            self.slider_col.set(self.top_left_cell_x + 1)
+
 
     # Also clear the structure to draw
     def update_mouse_position(self, event):
