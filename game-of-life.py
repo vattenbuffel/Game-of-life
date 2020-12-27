@@ -4,15 +4,25 @@ import copy
 import time
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 import re
+from queue import Queue
+import pickle
+import threading
 
-# Change save file to pickle
-
+# TODO:Change save file to pickle
+# TODO:Load structure
+# TODO:Clear/fill cell doesn't clear nor fill correctly
 
 class Cell:
     def __init__(self, col, row, alive=False):
         self.col = col
         self.row = row
         self.alive = alive
+        self.drawing = None
+    
+    def copy(self):
+        cell = Cell(self.col, self.row, alive=self.alive)
+        cell.drawing = self.drawing
+        return cell
 
 class Game:
     def __init__(self, n_cols, n_rows):
@@ -41,7 +51,7 @@ class Game:
             self.updated_cells[(row, col)] = self.cells[row,col]
 
         elif not self.cells[row,col].alive:
-            self.cells[row,col].alive = not self.cells[row,col].alive
+            self.cells[row,col].alive = True
             self.updated_cells[(row, col)] = self.cells[row,col]
             self.alive_cells[(row, col)] = self.cells[row,col]
 
@@ -79,6 +89,11 @@ class Game:
         for cell in cells_who_will_live:
             self.update_cell(cell.row, cell.col)
 
+    def revive_cell(self, row, col):
+        self.cells[row,col].alive = True
+        self.updated_cells[(row, col)] = self.cells[row,col]
+        self.alive_cells[(row, col)] = self.cells[row,col]
+
     def get_nr_alive_neighbours(self, cell):
         nr_neighbours = 0
         for x in range(cell.col-1, cell.col+2):
@@ -92,7 +107,83 @@ class Game:
         # since it counts it self as a neighbour decrease the nr of neighbours if it self is alive
         return nr_neighbours - 1*int(cell.alive)
 
+# Saves the locations of the alive cells with respect to the mouse pointer
+class Structure:
+    def __init__(self, alive_cells):
+        self.alive_cells = alive_cells
 
+# This should be the function given to a thread in order to save structures
+# args sent to the thread is a tuple of a queue on which the upper left and bottom right cells will be put and
+# the board it self and locks for getting the save and open file paths and a lock to signal when done
+# and a queue on which to add blinking cells, 
+# args = (queue, board, lock_save, lock_done)
+def save_structure(data_queue, board, lock_save, lock_done, queue_blink):
+    # Get the upper left and bottom right corner
+    popupmsg("Chose top left corner")
+    upper_left_row, upper_left_col  = data_queue.get()
+    queue_blink.put((board[upper_left_row, upper_left_col], True))
+
+    popupmsg("Chose bottom right corner")
+    bottom_right_row, bottom_right_col = data_queue.get()
+
+
+    # If bottom right is above top left
+    if upper_left_row > bottom_right_row or upper_left_col > bottom_right_col:
+        popupmsg("Invalid cells chosen")
+        queue_blink.put((board[upper_left_row, upper_left_col], False))
+        lock_done.release()
+        return
+    
+    alive_cells = []
+    for cell in board[upper_left_row:bottom_right_row+1, upper_left_col:bottom_right_col+1].reshape(-1):
+        if cell.alive:
+            cell_cpy = cell.copy() 
+            alive_cells.append(cell_cpy)
+
+    # If all the chosen cells were dead inform the user and abort the save
+    if len(alive_cells) == 0:
+        popupmsg("You chose no living cells")
+        queue_blink.put((board[upper_left_row, upper_left_col], False))
+        lock_done.release()
+        return
+
+    
+    
+    top_row = 10**100
+    leftest_col = 10**100
+    for cell in alive_cells:
+        if cell.row < top_row: top_row = cell.row
+
+        if cell.col < leftest_col: leftest_col = cell.col
+    
+    # Move all the cells left and up
+    for cell in alive_cells:
+        cell.row -= top_row
+        cell.col -= leftest_col
+
+
+    
+    # Get the save filepath
+    lock_save.release()
+    file_path = data_queue.get()
+    if file_path:
+        pickle.dump(alive_cells, open(file_path, "wb" ))
+
+    queue_blink.put((board[upper_left_row, upper_left_col], False))
+    lock_done.release()
+    
+    
+
+
+
+def popupmsg(msg):
+    popup = tk.Tk()
+    popup.wm_title("!")
+    label = tk.Label(popup, text=msg, font=("Helvetica", 10))
+    label.pack(side="top", fill="x", pady=10)
+    B1 = tk.Button(popup, text="Okay", command = popup.destroy)
+    B1.pack()
+    popup.mainloop()
 
     
 
@@ -170,10 +261,15 @@ class GUI:
         self.slider_fps.set(self.fps)
         self.slider_fps.pack()
 
-        self.button_open = tk.Button(self.frame_buttons, text="Open", command=self.open_file)
+        self.button_open = tk.Button(self.frame_buttons, text="Open Board", command=self.open_file)
         self.button_open.pack()
-        self.button_save = tk.Button(self.frame_buttons, text="Save As...", command=self.save_file)
+        self.button_save = tk.Button(self.frame_buttons, text="Save Board As...", command=self.save_file)
         self.button_save.pack()
+
+        self.button_save_structure = tk.Button(self.frame_buttons, text="Open Structure", command=self.open_structure)
+        self.button_save_structure.pack()
+        self.button_open_structure = tk.Button(self.frame_buttons, text="Save Structure As...", command=self.save_structure)
+        self.button_open_structure.pack()
 
         # Add sliders to move cells left and right and up and down
         self.frame_slider_row = tk.Frame(self.top)
@@ -192,7 +288,50 @@ class GUI:
 
         self.draw_grid()
         self.last_update = time.time()
+
+
+        # This is for passing data from and to threads who save and load structures
+        # One should probably not use threads for this but I want to learn
+        self.queue_structure = None
+        self.lock_structure_get_save_filepath = threading.Lock()
+        self.lock_structure_get_save_filepath.acquire(0)
+        self.lock_save_structure_done = threading.Lock()
+        self.lock_save_structure_done.acquire(0)
+        self.structure_to_place = []
+
+        # Handle blinking cells
+        self.blinking_cells = set()
+        self.blinking_hz = 2
+        self.last_blink = time.time()
+        self.blinking_state = False
+        self.queue_blinking_receive = Queue() # To pass cells which should be added or removed from blinking cells. Send tuples (cell, True/False)
+
+        # Get mouse location
+        self.top.bind('<Motion>', self.update_mouse_position)
+        self.mouse_col, self.mouse_row = None, None
         
+
+    # Also clear the structure to draw
+    def update_mouse_position(self, event):
+        col = int((event.x-self.cell_margin)/self.cell_width)
+        row = int((event.y-self.cell_margin)/self.cell_height)
+        self.mouse_col, self.mouse_row = col, row
+
+        for cell in self.structure_to_place:
+            self.reclear_cell(cell, self.mouse_row, self.mouse_col)
+
+
+    def open_structure(self):
+        filepath = self.get_open_path()
+        structure = pickle.load( open( filepath, "rb" ))
+        self.structure_to_place = structure
+
+    def save_structure(self):
+        self.queue_structure = Queue()
+        args = (self.queue_structure, self.game.cells, self.lock_structure_get_save_filepath, self.lock_save_structure_done, self.queue_blinking_receive)
+        thread = threading.Thread(target = save_structure, args=args)
+        thread.start()
+
     def row_slider_update(self, val):
         self.draw_board = True
         self.top_left_cell_y = int(val)
@@ -201,11 +340,11 @@ class GUI:
         self.draw_board = True
         self.top_left_cell_x = int(val)
 
+
+    """Open a file for editing."""
     def open_file(self):
-        """Open a file for editing."""
-        filepath = askopenfilename(
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
-        )
+        filepath = self.get_open_path()
+        
         if not filepath:
             return
         
@@ -240,14 +379,17 @@ class GUI:
                       self.slider_col.set(self.top_left_cell_x)
                       break
                 
+    def get_open_path(self):
+        filepath = askopenfilename(
+            filetypes=[("Pickle files", "*.p"), ("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+        return filepath
+
     def save_file(self):
         """Save the current file as a new file."""
-        filepath = asksaveasfilename(
-            defaultextension="txt",
-            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")],
-        )
-        if not filepath:
-            return
+        filepath = self.get_save_path()
+        if not filepath: return
+        
         with open(filepath, "w") as output_file:
             game_config = "grid_size:" + str(self.game.cells.shape) + "\n"
             board_txt = ""
@@ -257,6 +399,13 @@ class GUI:
 
             output_file.write(game_config)
             output_file.write(board_txt)
+
+    def get_save_path(self):
+        filepath = asksaveasfilename(
+            defaultextension="txt",
+            filetypes=[("Pickle files", "*.p"), ("Text Files", "*.txt"), ("All Files", "*.*"), ],
+        )
+        return filepath
 
     def slider_fps_change(self, val):
         self.fps = float(val)
@@ -274,20 +423,28 @@ class GUI:
             self.button_start_stop["text"] = "Start"
         
     def draw_square_in_cell(self, row, col, color):
-        x0 = int(col*self.cell_width + self.cell_margin + self.grid_border_width /2)
-        y0 = int(row*self.cell_height + self.cell_margin + self.grid_border_width /2)
+        x0 = int(col*self.cell_width + self.cell_margin + max(1, self.grid_border_width))
+        y0 = int(row*self.cell_height + self.cell_margin + max(1, self.grid_border_width))
         x1 = int((col+1)*self.cell_width + self.cell_margin - self.grid_border_width /2)
         y1 = int((row+1)*self.cell_height + self.cell_margin - self.grid_border_width /2)
 
-        self.canvas.create_rectangle(x0, y0, x1, y1, fill = color)
+        return self.canvas.create_rectangle(x0, y0, x1, y1, fill = color)
+
+    def refill_cell(self, cell, offset_row, offset_col):
+        self.canvas.delete(cell.drawing)
+        cell.drawing = self.fill_cell((cell.row-offset_row, cell.col-offset_col))
+
+    def reclear_cell(self, cell, offset_row, offset_col):
+        self.canvas.delete(cell.drawing)
+        cell.drawing = self.clear_cell((cell.row-offset_row, cell.col-offset_col))
 
     def clear_cell(self, location):
         row, col = location
-        self.draw_square_in_cell(row, col, self.bg_color)
+        return self.draw_square_in_cell(row, col, self.bg_color)
 
     def fill_cell(self, location):
         row, col = location
-        self.draw_square_in_cell(row, col, "black")
+        return self.draw_square_in_cell(row, col, "black")
 
     def cell_clicked(self, event):
         col = int((event.x-self.cell_margin)/self.cell_width)
@@ -300,27 +457,68 @@ class GUI:
         col += self.top_left_cell_x
         row += self.top_left_cell_y
 
+        # If the strcture queue is not None then the cell should go to the queue
+        if self.queue_structure is not None:
+            self.queue_structure.put((row, col))
+            return
+        
+        # If there's a structure to place it should be placed
+        if len(self.structure_to_place) > 0:
+            for cell in self.structure_to_place:
+                self.game.revive_cell(cell.row+self.mouse_row+self.top_left_cell_y, cell.col+self.mouse_col+self.top_left_cell_x)
+                self.reclear_cell(cell, -self.mouse_row, -self.mouse_col)
+            self.structure_to_place = []
+            return
+
+        # Game should register that a cell was clicked on
         self.game.cell_clicked(row, col)
+
+
 
     # Clear the board and redraw it. Only if something's been updated though
     def draw_updated(self):
         if len(self.game.updated_cells) == 0 and not self.draw_board: return
 
-        gui.canvas.delete("all")
+        # Clar the board of alive cells and those who were alive but are dead now
+        for key in self.game.updated_cells:
+            gui.canvas.delete(self.game.updated_cells[key].drawing)
+        for key in self.game.alive_cells:
+            gui.canvas.delete(self.game.alive_cells[key].drawing)
 
+
+        # Add the updated cells to the filled cells list and draw them
         x_visible = range(self.top_left_cell_x, self.top_left_cell_x + self.n_cols_visable)
         y_visible = range(self.top_left_cell_y, self.top_left_cell_y + self.n_rows_visable)
         for key in self.game.alive_cells:
             # Check if the cell is visible
             if key[0] in y_visible and key[1] in x_visible:
                 location = (key[0] - self.top_left_cell_y, key[1] - self.top_left_cell_x)
-                self.fill_cell(location)
+                self.game.alive_cells[key].drawing = self.fill_cell(location)
+                
 
         self.game.updated_cells = {}
         self.draw_board = False
 
-        self.draw_grid()
-        
+    # Draw all cells which should blink, including structure to place
+    def draw_blinking(self):
+        # Is it time to blink
+        if time.time() - self.last_blink > 1/self.blinking_hz:
+            for cell in self.blinking_cells:
+                if not self.blinking_state:  
+                    self.reclear_cell(cell, self.top_left_cell_y, self.top_left_cell_x)
+                else:
+                    self.refill_cell(cell, self.top_left_cell_y, self.top_left_cell_x)
+                    
+            # Draw structure to place
+            for cell in self.structure_to_place:
+                if not self.blinking_state:  
+                    self.reclear_cell(cell, -self.mouse_row, -self.mouse_col)
+                else:
+                    self.refill_cell(cell, -self.mouse_row, -self.mouse_col)
+
+            self.blinking_state = not self.blinking_state
+            self.last_blink = time.time()
+
     def update(self):
         if self.step:
             self.game.update_board()
@@ -330,6 +528,36 @@ class GUI:
                 self.game.update_board()
                 self.last_update = time.time()
         self.draw_updated()
+
+        # If it should get the filepath for the save structure
+        if self.lock_structure_get_save_filepath.acquire(0):
+            self.queue_structure.put(self.get_save_path())
+        
+        # Is the save thread done
+        if self.lock_save_structure_done.acquire(0):
+            self.queue_structure = None
+
+
+        # Handle blinking cell
+        # Get/remove blinking cells from other threads
+        try:
+            cell, add = self.queue_blinking_receive.get_nowait()
+            if add:
+                self.blinking_cells.update([cell])
+            else:
+                self.blinking_cells.remove(cell)
+                # Redraw it to the proper fill or clear
+                self.canvas.delete(cell.drawing)
+                if cell.alive:
+                    cell.drawing = self.fill_cell((cell.row-self.top_left_cell_y, cell.col-self.top_left_cell_x))
+                else:
+                    cell.drawing = self.clear_cell((cell.row-self.top_left_cell_y, cell.col-self.top_left_cell_x))
+        except:
+            pass
+        self.draw_blinking()
+        
+
+
 
     def draw_grid(self):
         # Draw rows
@@ -352,6 +580,7 @@ class GUI:
 
 
 gui = GUI(300,300)
+
 
 while True:
     gui.update()
