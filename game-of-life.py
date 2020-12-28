@@ -9,7 +9,6 @@ import pickle
 import threading
 
 # TODO:Change save file to pickle
-# TODO:Fix blinking cell when scrolling with hjkl
 # TODO:ADD clear button
 
 
@@ -94,6 +93,18 @@ class Game:
         self.cells[row,col].alive = True
         self.updated_cells[(row, col)] = self.cells[row,col]
         self.alive_cells[(row, col)] = self.cells[row,col]
+
+    def kill_cell(self, row, col):
+        self.cells[row,col].alive = False
+        self.updated_cells[(row, col)] = self.cells[row,col]
+        del self.alive_cells[row,col] 
+
+    def kill_cells_all(self):
+        for cell in self.alive_cells.values():
+            cell.alive = False
+            self.updated_cells[(cell.row, cell.col)] = cell
+        self.alive_cells = {}
+
 
     def get_nr_alive_neighbours(self, cell):
         nr_neighbours = 0
@@ -251,6 +262,9 @@ class GUI:
         self.button_step = tk.Button(self.frame_buttons, text="Step", command = lambda : self.button_step_clicked())
         self.button_step.pack()
 
+        self.button_clear = tk.Button(self.frame_buttons, text="Clear", command = self.button_clear_clicked)
+        self.button_clear.pack()
+
         self.label_fps = tk.Label(self.frame_buttons, text="Fps")
         self.label_fps.pack()
         self.slider_fps = tk.Scale(self.frame_buttons, from_=1, to=120, command = lambda val : self.slider_fps_change(val))
@@ -309,6 +323,11 @@ class GUI:
         # Handle keyboard presses
         self.top.bind("<KeyPress>", self.keyboard_pressed)
         
+
+    def button_clear_clicked(self):
+        self.game.kill_cells_all()
+
+
     def keyboard_pressed(self, event):
         if event.char == 'j':
             self.slider_row.set(self.top_left_cell_y + 1)
@@ -319,7 +338,6 @@ class GUI:
         elif event.char == 'l':
             self.slider_col.set(self.top_left_cell_x + 1)
 
-
     # Also clear the structure to draw
     def update_mouse_position(self, event):
         col = int((event.x-self.cell_margin)/self.cell_width)
@@ -329,7 +347,6 @@ class GUI:
         for cell in self.structure_to_place:
             self.canvas.delete(cell.drawing)
             self.refill_cell(cell, -self.mouse_row, -self.mouse_col)
-
 
     def open_structure(self):
         filepath = self.get_open_path()
@@ -559,9 +576,6 @@ class GUI:
             pass
         self.draw_blinking()
         
-
-
-
     def draw_grid(self):
         # Draw rows
         for y in range(self.n_rows + 1):
