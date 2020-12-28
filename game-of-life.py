@@ -46,14 +46,10 @@ class Game:
     # Moves it in and out of lists and sets it to alive or dead
     def update_cell(self, row, col):
         if self.cells[row,col].alive:
-            self.cells[row,col].alive = False
-            del self.alive_cells[row,col] 
-            self.updated_cells[(row, col)] = self.cells[row,col]
+            self.kill_cell(row, col)
 
         elif not self.cells[row,col].alive:
-            self.cells[row,col].alive = True
-            self.updated_cells[(row, col)] = self.cells[row,col]
-            self.alive_cells[(row, col)] = self.cells[row,col]
+            self.revive_cell(row, col)
 
     def update_board(self):
         cells_who_will_live = []
