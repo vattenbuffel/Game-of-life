@@ -10,6 +10,7 @@ import threading
 
 # TODO:Change save file to pickle
 # TODO:Fix blinking cell when scrolling with hjkl
+# TODO:ADD clear button
 
 
 class Cell:
