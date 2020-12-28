@@ -126,11 +126,11 @@ class Structure:
 # args = (queue, board, lock_save, lock_done)
 def save_structure(data_queue, board, lock_save, lock_done, queue_blink):
     # Get the upper left and bottom right corner
-    popupmsg("Chose top left corner")
+    popupmsg("Choose top left corner")
     upper_left_row, upper_left_col  = data_queue.get()
     queue_blink.put((board[upper_left_row, upper_left_col], True))
 
-    popupmsg("Chose bottom right corner")
+    popupmsg("Choose bottom right corner")
     bottom_right_row, bottom_right_col = data_queue.get()
 
 
@@ -394,13 +394,15 @@ class GUI:
 
         board_shape = save_dict["grid_size"]
         top_left_coordinates = save_dict["top_left_coordinates"]
-        alive_Cells = save_dict["alive_cells"]
+        alive_cells = save_dict["alive_cells"]
 
         self.top.destroy()
         self.__init__(board_shape[0], board_shape[1])        
         self.slider_row.set(top_left_coordinates[0])
         self.slider_col.set(top_left_coordinates[1])
-        self.game.alive_cells = alive_Cells
+        for key in alive_cells:
+            row, col = key
+            self.game.update_cell(row, col)
         
     def get_open_path(self):
         filepath = askopenfilename(
