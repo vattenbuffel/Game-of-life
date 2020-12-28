@@ -8,7 +8,6 @@ from queue import Queue
 import pickle
 import threading
 
-# TODO:Change save file to pickle
 # TODO:Add functionality to rotate structures
 
 
@@ -175,20 +174,26 @@ def save_structure(data_queue, board, lock_save, lock_done, queue_blink):
     lock_save.release()
     file_path = data_queue.get()
     if file_path: # Check if correct file path
-        pickle.dump(alive_cells, open(file_path, "wb" ))
+        save_dict = {"is_structure_save":True, "alive_cells":alive_cells}
+        pickle.dump(save_dict, open(file_path, "wb" ))
 
     queue_blink.put((board[upper_left_row, upper_left_col], False))
     lock_done.release()
     
 def popupmsg(msg):
-    popup = tk.Tk()
-    popup.wm_title("!")
-    label = tk.Label(popup, text=msg, font=("Helvetica", 10))
-    label.pack(side="top", fill="x", pady=10)
-    B1 = tk.Button(popup, text="Okay", command = popup.destroy)
-    B1.pack()
-    popup.bind("<KeyPress>", lambda event: popup.destroy())
-    popup.mainloop()
+    def fun_to_run(msg):
+        popup = tk.Tk()
+        popup.wm_title("!")
+        label = tk.Label(popup, text=msg, font=("Helvetica", 10))
+        label.pack(side="top", fill="x", pady=10)
+        B1 = tk.Button(popup, text="Okay", command = popup.destroy)
+        B1.pack()
+        popup.bind("<KeyPress>", lambda event: popup.destroy())
+        popup.mainloop()
+
+    thread = threading.Thread(target = lambda: fun_to_run(msg))
+    thread.start()
+    thread.join()
 
 class GUI:
     def __init__(self, n_rows, n_cols):
@@ -267,9 +272,9 @@ class GUI:
         self.slider_fps.set(self.fps)
         self.slider_fps.pack()
 
-        self.button_open = tk.Button(self.frame_buttons, text="Open Board", command=self.open_file)
+        self.button_open = tk.Button(self.frame_buttons, text="Open Board", command=self.open_board)
         self.button_open.pack()
-        self.button_save = tk.Button(self.frame_buttons, text="Save Board As...", command=self.save_file)
+        self.button_save = tk.Button(self.frame_buttons, text="Save Board As...", command=self.save_board)
         self.button_save.pack()
 
         self.button_save_structure = tk.Button(self.frame_buttons, text="Open Structure", command=self.open_structure)
@@ -346,8 +351,16 @@ class GUI:
         filepath = self.get_open_path()
         if not filepath:
             return
-        structure = pickle.load( open( filepath, "rb" ))
-        self.structure_to_place = structure
+        save_dict = pickle.load( open( filepath, "rb" ))
+
+        # Check if it's a saved structure
+        try:
+            save_dict["is_structure_save"]
+        except:
+            popupmsg("Invalid save file chosen")
+            return
+
+        self.structure_to_place = save_dict["alive_cells"]
 
     def save_structure(self):
         self.queue_structure = Queue()
@@ -364,13 +377,21 @@ class GUI:
         self.top_left_cell_x = int(val)
 
     # Opens the board and sets the viewing location
-    def open_file(self):
+    def open_board(self):
         filepath = self.get_open_path()
         
         if not filepath:
             return
         
         save_dict = pickle.load( open( filepath, "rb" ))
+
+        # Check if opend a board save
+        try:
+            save_dict["is_board_save"]
+        except:
+            popupmsg("Invalid save file chosen")
+            return
+
         board_shape = save_dict["grid_size"]
         top_left_coordinates = save_dict["top_left_coordinates"]
         alive_Cells = save_dict["alive_cells"]
@@ -388,11 +409,11 @@ class GUI:
         return filepath
 
     # Saves the board and viewing location
-    def save_file(self):
+    def save_board(self):
         filepath = self.get_save_path()
         if not filepath: return
 
-        dict_to_save = {"grid_size":None, "top_left_coordinates":None, "alive_cells":None}
+        dict_to_save = {"is_board_save":True, "grid_size":None, "top_left_coordinates":None, "alive_cells":None}
 
         dict_to_save["grid_size"] = self.game.cells.shape
         dict_to_save["top_left_coordinates"] = (self.top_left_cell_y,self.top_left_cell_x)
