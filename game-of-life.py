@@ -338,6 +338,8 @@ class GUI:
 
     def open_structure(self):
         filepath = self.get_open_path()
+        if not filepath:
+            return
         structure = pickle.load( open( filepath, "rb" ))
         self.structure_to_place = structure
 
