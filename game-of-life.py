@@ -9,7 +9,7 @@ import pickle
 import threading
 
 # TODO:Change save file to pickle
-# TODO:ADD clear button
+# TODO:Add functionality to rotate structures
 
 
 class Cell:
@@ -318,11 +318,9 @@ class GUI:
 
         # Handle keyboard presses
         self.top.bind("<KeyPress>", self.keyboard_pressed)
-        
 
     def button_clear_clicked(self):
         self.game.kill_cells_all()
-
 
     def keyboard_pressed(self, event):
         if event.char == 'j':
@@ -365,66 +363,43 @@ class GUI:
         self.draw_board = True
         self.top_left_cell_x = int(val)
 
-
-    """Open a file for editing."""
+    # Opens the board and sets the viewing location
     def open_file(self):
         filepath = self.get_open_path()
         
         if not filepath:
             return
         
-        with open(filepath, "r") as input_file:
-            game_data = input_file.read().split("\n")
-            # The last element will be a \n. Remove this
-            game_data.pop(-1)
+        save_dict = pickle.load( open( filepath, "rb" ))
+        board_shape = save_dict["grid_size"]
+        top_left_coordinates = save_dict["top_left_coordinates"]
+        alive_Cells = save_dict["alive_cells"]
 
-            # Create the board
-            for data in game_data:
-                if "grid_size" in data:
-                    size = [int(num) for num in re.findall(r'\d+', data)]
-                    self.top.destroy()
-                    self.__init__(size[0], size[1])
-                    game_data.remove(data)
-                    break
-            
-            # Fill the board
-            for data in game_data:
-                if "False" in data or not "True" in data:
-                    continue
-                index = [int(num) for num in re.findall(r'\d+', data)]
-                self.game.update_cell(index[0], index[1])
-
-            # Fix viewing location
-            for data in game_data:
-                if "top_left_coordinates:" in data:
-                      top_left = [int(num) for num in re.findall(r'\d+', data)]
-                      self.top_left_cell_y = top_left[0]
-                      self.top_left_cell_x = top_left[1]
-                      self.slider_row.set(self.top_left_cell_y)
-                      self.slider_col.set(self.top_left_cell_x)
-                      break
-                
+        self.top.destroy()
+        self.__init__(board_shape[0], board_shape[1])        
+        self.slider_row.set(top_left_coordinates[0])
+        self.slider_col.set(top_left_coordinates[1])
+        self.game.alive_cells = alive_Cells
+        
     def get_open_path(self):
         filepath = askopenfilename(
             filetypes=[("Pickle files", "*.p"), ("Text Files", "*.txt"), ("All Files", "*.*")]
         )
         return filepath
 
+    # Saves the board and viewing location
     def save_file(self):
-        """Save the current file as a new file."""
         filepath = self.get_save_path()
         if not filepath: return
+
+        dict_to_save = {"grid_size":None, "top_left_coordinates":None, "alive_cells":None}
+
+        dict_to_save["grid_size"] = self.game.cells.shape
+        dict_to_save["top_left_coordinates"] = (self.top_left_cell_y,self.top_left_cell_x)
+        dict_to_save["alive_cells"] = self.game.alive_cells
         
-        with open(filepath, "w") as output_file:
-            game_config = "grid_size:" + str(self.game.cells.shape) + "\n"
-            board_txt = ""
-            board_txt += "top_left_coordinates:" + str((self.top_left_cell_y,self.top_left_cell_x)) + "\n"
-            for cell in self.game.cells.reshape(-1):
-                board_txt +=  "row:" + str(cell.row) + "col:" + str(cell.col) + "alive:" + str(cell.alive)  +"\n"
-
-            output_file.write(game_config)
-            output_file.write(board_txt)
-
+        pickle.dump(dict_to_save, open(filepath, "wb" ))
+        
     def get_save_path(self):
         filepath = asksaveasfilename(
             defaultextension="txt",
