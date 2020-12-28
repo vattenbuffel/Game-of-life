@@ -173,10 +173,6 @@ def save_structure(data_queue, board, lock_save, lock_done, queue_blink):
     queue_blink.put((board[upper_left_row, upper_left_col], False))
     lock_done.release()
     
-    
-
-
-
 def popupmsg(msg):
     popup = tk.Tk()
     popup.wm_title("!")
@@ -186,8 +182,6 @@ def popupmsg(msg):
     B1.pack()
     popup.bind("<KeyPress>", lambda event: popup.destroy())
     popup.mainloop()
-
-    
 
 class GUI:
     def __init__(self, n_rows, n_cols):
@@ -334,6 +328,7 @@ class GUI:
 
         for cell in self.structure_to_place:
             self.canvas.delete(cell.drawing)
+            self.refill_cell(cell, -self.mouse_row, -self.mouse_col)
 
 
     def open_structure(self):
