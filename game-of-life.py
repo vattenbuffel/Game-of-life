@@ -3,12 +3,12 @@ import numpy as np
 import copy
 import time
 from tkinter.filedialog import askopenfilename, asksaveasfilename
-import re
 from queue import Queue
 import pickle
 import threading
 
 # TODO:Add functionality to rotate structures
+# TODO:Add zoom functionality
 
 
 class Cell:
